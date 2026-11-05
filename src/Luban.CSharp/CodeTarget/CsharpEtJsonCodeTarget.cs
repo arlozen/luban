@@ -20,6 +20,7 @@
 
 using Luban.CodeTarget;
 using Luban.CSharp.TemplateExtensions;
+using Luban.Defs;
 using Luban.Diagnostics;
 using Luban.Types;
 using Scriban;
@@ -31,6 +32,27 @@ namespace Luban.CSharp.CodeTarget;
 public class CsharpEtJsonCodeTarget : CsharpCodeTargetBase
 {
     protected override bool NeedGenerateTables => false;
+
+    protected override string GetTypeOutputPath(DefTypeBase type)
+    {
+        string typePath = base.GetTypeOutputPath(type);
+        if (!EnvManager.Current.TryGetOption(Name, "schemaPackagesRoot", false, out string packagesRoot)
+            || string.IsNullOrEmpty(type.Source?.File))
+        {
+            return typePath;
+        }
+
+        string sourcePath = Path.GetFullPath(type.Source.File, GenerationContext.GlobalConf.ConfigDir);
+        string relativePath = Path.GetRelativePath(packagesRoot, sourcePath);
+        int separator = relativePath.IndexOf(Path.DirectorySeparatorChar);
+        if (Path.IsPathRooted(relativePath) || separator < 0 || relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+        {
+            return typePath;
+        }
+
+        return $"{relativePath[..separator]}/{typePath}";
+    }
+
 
     protected override void ValidationTypeNames(GenerationContext ctx)
     {

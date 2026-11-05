@@ -167,6 +167,8 @@ public abstract class CodeTargetBase : ICodeTarget
         ValidationTypeNames(ctx);
     }
 
+    protected virtual string GetTypeOutputPath(DefTypeBase type) => GetFileNameWithoutExtByTypeName(type.FullName);
+
     protected virtual bool NeedGenerateTables => true;
 
     public virtual void Handle(GenerationContext ctx, OutputFileManifest manifest)
@@ -188,7 +190,7 @@ public abstract class CodeTargetBase : ICodeTarget
             {
                 var writer = new CodeWriter();
                 GenerateTable(ctx, table, writer);
-                return CreateOutputFile($"{GetFileNameWithoutExtByTypeName(table.FullName)}.{FileSuffixName}", writer.ToResult(FileHeader));
+                return CreateOutputFile($"{GetTypeOutputPath(table)}.{FileSuffixName}", writer.ToResult(FileHeader));
             }));
         }
 
@@ -198,7 +200,7 @@ public abstract class CodeTargetBase : ICodeTarget
             {
                 var writer = new CodeWriter();
                 GenerateBean(ctx, bean, writer);
-                return CreateOutputFile($"{GetFileNameWithoutExtByTypeName(bean.FullName)}.{FileSuffixName}", writer.ToResult(FileHeader));
+                return CreateOutputFile($"{GetTypeOutputPath(bean)}.{FileSuffixName}", writer.ToResult(FileHeader));
             }));
         }
 
@@ -208,7 +210,7 @@ public abstract class CodeTargetBase : ICodeTarget
             {
                 var writer = new CodeWriter();
                 GenerateEnum(ctx, @enum, writer);
-                return CreateOutputFile($"{GetFileNameWithoutExtByTypeName(@enum.FullName)}.{FileSuffixName}", writer.ToResult(FileHeader));
+                return CreateOutputFile($"{GetTypeOutputPath(@enum)}.{FileSuffixName}", writer.ToResult(FileHeader));
             }));
         }
 
