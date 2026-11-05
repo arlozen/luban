@@ -1,0 +1,19 @@
+<module name="">
+    <bean name="Item">
+        <var name="id" type="int"/>
+        <var name="name" type="string"/>
+    </bean>
+    <bean name="Reward" valueType="true">
+        <var name="id" type="int"/>
+        <var name="item_id" type="int#ref=TbItem"/>
+        <var name="item_ids" type="list,(int#ref=TbItem)"/>
+    </bean>
+    <bean name="EtSettings">
+        <var name="config_type" type="string"/>
+        <var name="reward" type="Reward"/>
+        <var name="rewards" type="list,Reward"/>
+    </bean>
+    <table name="TbEtSettings" value="EtSettings" mode="one" input="settings.json"/>
+    <table name="TbItem" value="Item" input="*@item.json"/>
+    <table name="TbReward" value="Reward" input="*@reward.json"/>
+</module>

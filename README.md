@@ -41,6 +41,12 @@ luban标准化了游戏配置开发工作流，可以极大提升策划和程序
 
 仓库内 AI 资源见 [`ai/`](./ai/README.md)。
 
+## ET JSON 加载
+
+使用 `-c cs-et-json -d json` 生成 ET 配置。每个表通过 `ET.IConfigJsonDataProvider.GetJsonNode` 读取数据，传入的名称省略 `.json` 后缀。加载器先构造并注册所有表的 `ET.Singleton<T>` 实例，再逐表调用 `ResolveRef()`，完成后即可读取 `_Ref` 成员。表类型元数据通过 `ET.IConfigCategory.ConfigType` 获取。
+
+表和 bean 的 `OnAfterDeserialize()` 在各自构造时调用，此时跨表引用尚未解析。
+
 ## 开发者：运行测试
 
 主仓自带 xUnit 集成测试（不依赖外部 `luban_examples`）：

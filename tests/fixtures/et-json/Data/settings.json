@@ -1,0 +1,5 @@
+{
+  "config_type": "settings",
+  "reward": { "id": 100, "item_id": 1, "item_ids": [1] },
+  "rewards": [{ "id": 100, "item_id": 1, "item_ids": [1] }]
+}

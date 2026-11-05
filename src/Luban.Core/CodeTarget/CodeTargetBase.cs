@@ -167,15 +167,20 @@ public abstract class CodeTargetBase : ICodeTarget
         ValidationTypeNames(ctx);
     }
 
+    protected virtual bool NeedGenerateTables => true;
+
     public virtual void Handle(GenerationContext ctx, OutputFileManifest manifest)
     {
         var tasks = new List<Task<OutputFile>>();
-        tasks.Add(Task.Run(() =>
+        if (NeedGenerateTables)
         {
-            var writer = new CodeWriter();
-            GenerateTables(ctx, ctx.ExportTables, writer);
-            return CreateOutputFile($"{GetFileNameWithoutExtByTypeName(ctx.Target.Manager)}.{FileSuffixName}", writer.ToResult(FileHeader));
-        }));
+            tasks.Add(Task.Run(() =>
+            {
+                var writer = new CodeWriter();
+                GenerateTables(ctx, ctx.ExportTables, writer);
+                return CreateOutputFile($"{GetFileNameWithoutExtByTypeName(ctx.Target.Manager)}.{FileSuffixName}", writer.ToResult(FileHeader));
+            }));
+        }
 
         foreach (var table in ctx.ExportTables)
         {

@@ -65,6 +65,11 @@ public abstract class TemplateCodeTargetBase : CodeTargetBase
 
     public override void GenerateTables(GenerationContext ctx, List<DefTable> tables, CodeWriter writer)
     {
+        if (!NeedGenerateTables)
+        {
+            return;
+        }
+
         var template = GetTemplate("tables");
         var tplCtx = CreateTemplateContext(template);
         var extraEnvs = new ScriptObject

@@ -14,11 +14,61 @@ public static class CsharpCompileHarness
 {
     public static object LoadTables(string codeDir, string dataDir, string codeTarget)
     {
+        var asm = BuildGeneratedAssembly(codeDir, codeTarget, out var alc);
+        var tablesType = asm.GetTypes().FirstOrDefault(t => t.Name == "Tables")
+            ?? throw new InvalidOperationException("Generated Tables type not found");
+
+        var ctor = tablesType.GetConstructors().Single();
+        var loaderType = ctor.GetParameters().Single().ParameterType;
+        var loader = CreateLoader(loaderType, dataDir);
+        // Hold ALC on the returned instance via conditional weak table isn't needed for tests;
+        // GC roots the tables object which roots the assembly which roots the ALC.
+        GC.KeepAlive(alc);
+        return ctor.Invoke(new object[] { loader });
+    }
+
+    public static IReadOnlyDictionary<string, object> LoadEtConfigCategories(string codeDir, string dataDir, string codeTarget)
+    {
+        var asm = BuildGeneratedAssembly(codeDir, codeTarget, out var alc);
+        var providerType = asm.GetType("ET.FileConfigJsonDataProvider")
+            ?? throw new InvalidOperationException("ET.FileConfigJsonDataProvider not found in generated assembly");
+        var provider = Activator.CreateInstance(providerType, new object[] { dataDir })
+            ?? throw new InvalidOperationException("Failed to create ET config json data provider");
+        var categoryInterface = asm.GetType("ET.IConfigCategory")
+            ?? throw new InvalidOperationException("ET.IConfigCategory not found in generated assembly");
+
+        var tableTypes = asm.GetTypes()
+            .Where(t => t.IsClass && !t.IsAbstract && categoryInterface.IsAssignableFrom(t))
+            .OrderBy(t => t.FullName, StringComparer.Ordinal)
+            .ToList();
+        Assert.NotEmpty(tableTypes);
+
+        var categories = new Dictionary<string, object>(StringComparer.Ordinal);
+        foreach (var tableType in tableTypes)
+        {
+            var ctor = tableType.GetConstructors().Single();
+            categories.Add(tableType.Name, ctor.Invoke(new[] { provider }));
+        }
+
+        var registered = Array.CreateInstance(categoryInterface, categories.Count);
+        int index = 0;
+        foreach (var category in categories.Values)
+        {
+            registered.SetValue(category, index++);
+        }
+        asm.GetType("ET.ConfigReferenceResolver").GetMethod("ResolveAll").Invoke(null, new object[] { registered });
+
+        GC.KeepAlive(alc);
+        return categories;
+    }
+
+    private static Assembly BuildGeneratedAssembly(string codeDir, string codeTarget, out AssemblyLoadContext alc)
+    {
         var id = Guid.NewGuid().ToString("N");
         var workDir = Path.Combine(Path.GetTempPath(), "luban-csharp-harness", id);
         Directory.CreateDirectory(workDir);
         // Keep collectible ALC alive for the returned object lifetime; unique AssemblyName avoids LoadFrom conflicts.
-        var alc = new AssemblyLoadContext($"luban-test-{id}", isCollectible: true);
+        alc = new AssemblyLoadContext($"luban-test-{id}", isCollectible: true);
         CopyDirectory(codeDir, Path.Combine(workDir, "Gen"));
         CopyRuntime(workDir);
 
@@ -30,18 +80,7 @@ public static class CsharpCompileHarness
 
         var dll = Path.Combine(workDir, "bin", "Release", "net8.0", $"GeneratedConsumer_{id}.dll");
         Assert.True(File.Exists(dll), $"Built DLL missing: {dll}");
-
-        var asm = alc.LoadFromAssemblyPath(dll);
-        var tablesType = asm.GetTypes().FirstOrDefault(t => t.Name == "Tables")
-            ?? throw new InvalidOperationException("Generated Tables type not found");
-
-        var ctor = tablesType.GetConstructors().Single();
-        var loaderType = ctor.GetParameters().Single().ParameterType;
-        var loader = CreateLoader(loaderType, dataDir);
-        // Hold ALC on the returned instance via conditional weak table isn't needed for tests;
-        // GC roots the tables object which roots the assembly which roots the ALC.
-        GC.KeepAlive(alc);
-        return ctor.Invoke(new object[] { loader });
+        return alc.LoadFromAssemblyPath(dll);
     }
 
     public static T GetProp<T>(object obj, string name)
