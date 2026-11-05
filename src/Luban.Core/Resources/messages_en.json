@@ -42,6 +42,8 @@
   "error.def.table.index_not_exist": "table:'{0}' index:'{1}' field does not exist",
   "error.def.table.no_field": "table:'{0}' must define at least one field",
   "error.def.table.default_index_not_exported": "table:'{0}' default index {1} is not exported, please specify a valid index",
+  "error.def.table.invalid_package_id": "table {0} has an invalid package ID '{1}'",
+  "error.def.table.invalid_package_output": "table {0} output '{1}' must be a relative path within its package",
   "error.def.table.unknown_mode": "unknown mode:'{0}'",
   "error.def.table.index_nullable": "table:'{0}' index:'{1}' cannot be a nullable type",
   "error.def.table.index_invalid_type": "table:'{0}' index:'{1}' type:'{2}' cannot be used as index",

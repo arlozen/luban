@@ -58,6 +58,11 @@ public class CsharpEtJsonCodeTarget : CsharpCodeTargetBase
 
     private sealed class EtReferenceTemplateExtension : ScriptObject
     {
+        public static string EtStringLiteral(string value)
+        {
+            return System.Text.Json.JsonSerializer.Serialize(value);
+        }
+
         public static bool EtBeanNeedsResolveRef(TType type)
         {
             return type is TBean { DefBean.TypeMappers: null };

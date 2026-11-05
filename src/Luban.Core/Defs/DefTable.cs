@@ -45,9 +45,22 @@ public class DefTable : DefTypeBase
         Comment = b.Comment;
         ReadSchemaFromFile = b.ReadSchemaFromFile;
         Tags = b.Tags;
-        _outputFile = b.OutputFile;
+        PackageId = b.PackageId?.Trim() ?? string.Empty;
+        _outputFile = PackageId.Length == 0 ? b.OutputFile : b.OutputFile?.Replace('\\', '/');
         CurrentVariant = b.CurrentVariant ?? "";
         Source = b.Source;
+        if (PackageId.Length > 0)
+        {
+            if (!IsValidPathSegment(PackageId))
+            {
+                throw new LubanException(Source, "error.def.table.invalid_package_id", FullName, PackageId);
+            }
+
+            if (!DataKey.Split('/').All(IsValidPathSegment))
+            {
+                throw new LubanException(Source, "error.def.table.invalid_package_output", FullName, DataKey);
+            }
+        }
     }
 
     public string Index { get; private set; }
@@ -93,7 +106,20 @@ public class DefTable : DefTypeBase
 
     public List<ITableValidator> Validators { get; } = new();
 
-    public string OutputDataFile => string.IsNullOrWhiteSpace(_outputFile) ? FullName.Replace('.', '_').ToLower() : _outputFile;
+    public string PackageId { get; }
+
+    public string DataKey => string.IsNullOrWhiteSpace(_outputFile) ? FullName.Replace('.', '_').ToLower() : _outputFile;
+
+    public string OutputDataFile => PackageId.Length == 0 ? DataKey : $"{PackageId}/{DataKey}";
+
+    private static bool IsValidPathSegment(string segment)
+    {
+        return segment.Length > 0 && !segment.EndsWith('.') && !segment.EndsWith(' ')
+            && !segment.Any(c => char.IsControl(c) || "<>:\"/\\|?*".Contains(c))
+            && !System.Text.RegularExpressions.Regex.IsMatch(segment.Split('.')[0].TrimEnd(),
+                @"^(CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])$",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+    }
 
     public override void Compile()
     {

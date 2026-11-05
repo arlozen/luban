@@ -2,7 +2,12 @@
 
 using System.Collections;
 using System.Reflection;
+using System.Text.Json.Nodes;
+using System.Xml.Linq;
+using Luban.Defs;
 using Luban.Diagnostics;
+using Luban.RawDefs;
+using Luban.Schema;
 using Luban.Tests.Helpers;
 using Xunit;
 
@@ -46,6 +51,85 @@ public class CsharpCodeTargetTests
             codeTargets: new[] { "cs-editor-json" },
             outputCodeDir: ws.CodeDir);
         Assert.True(Directory.GetFiles(ws.CodeDir, "*.cs", SearchOption.AllDirectories).Length > 0);
+    }
+
+    [Theory]
+    [InlineData("package-tables.xlsx", true)]
+    [InlineData("legacy-tables.xlsx", false)]
+    public void EtJson_LoadsPackagedAndUnpackagedTablesFromOneGeneration(string workbook, bool hasPackageColumn)
+    {
+        using var ws = new TempWorkspace();
+        var schema = XDocument.Load(TestPaths.Fixture("core/Defines/schema.xml"));
+        foreach (var table in schema.Root.Elements("table").ToList())
+        {
+            if ((string)table.Attribute("name") == "TbScore")
+            {
+                table.SetAttributeValue("packageId", "com.example.score");
+                table.SetAttributeValue("output", @"ranked\scores");
+            }
+            else
+            {
+                table.Remove();
+            }
+        }
+        schema.Save(Path.Combine(ws.Root, "schema.xml"));
+        File.Copy(TestPaths.Fixture($"core/{workbook}"), Path.Combine(ws.Root, "tables.xlsx"));
+
+        var config = JsonNode.Parse(File.ReadAllText(TestPaths.FixtureConf("core")));
+        config["schemaFiles"] = JsonNode.Parse("""
+            [
+              { "fileName": "schema.xml", "type": "" },
+              { "fileName": "tables.xlsx", "type": "table" }
+            ]
+            """);
+        config["dataDir"] = TestPaths.Fixture("core/Data");
+        var configPath = Path.Combine(ws.Root, "luban.conf");
+        File.WriteAllText(configPath, config.ToJsonString());
+
+        LubanRunner.Run(
+            configPath,
+            codeTargets: new[] { "cs-et-json" },
+            dataTargets: new[] { "json" },
+            outputCodeDir: ws.CodeDir,
+            outputDataDir: ws.DataDir,
+            variants: new Dictionary<string, string> { ["TbItem"] = "battle" });
+
+        var itemDir = hasPackageColumn ? Path.Combine(ws.DataDir, "com.example.battle") : ws.DataDir;
+        Assert.True(File.Exists(Path.Combine(itemDir, "tbitem.json")));
+        Assert.True(File.Exists(Path.Combine(ws.DataDir, "com.example.score", "ranked", "scores.json")));
+        Assert.True(File.Exists(Path.Combine(ws.DataDir, "tbglobal.json")));
+        Assert.False(Directory.Exists(Path.Combine(ws.DataDir, "com.example.fallback")));
+        var itemCall = hasPackageColumn
+            ? """provider.GetJsonNode("com.example.battle", "tbitem")"""
+            : """provider.GetJsonNode("tbitem")""";
+        Assert.Contains(itemCall, File.ReadAllText(Path.Combine(ws.CodeDir, "TbItem.cs")));
+        Assert.Contains("""provider.GetJsonNode("com.example.score", "ranked/scores")""",
+            File.ReadAllText(Path.Combine(ws.CodeDir, "TbScore.cs")));
+        Assert.Contains("""provider.GetJsonNode("tbglobal")""",
+            File.ReadAllText(Path.Combine(ws.CodeDir, "TbGlobal.cs")));
+
+        var categories = CsharpCompileHarness.LoadEtConfigCategories(ws.CodeDir, ws.DataDir, "cs-et-json");
+        var item = CsharpCompileHarness.Invoke(categories["TbItem"], "Get", 1);
+        Assert.Equal("sword", CsharpCompileHarness.GetProp<string>(item, "Name"));
+        var score = CsharpCompileHarness.Invoke(categories["TbScore"], "Get", 1, 2);
+        Assert.Equal(200, CsharpCompileHarness.GetProp<int>(score, "Score"));
+        Assert.Equal(3, CsharpCompileHarness.GetProp<int>(categories["TbGlobal"], "Version"));
+    }
+
+    [Theory]
+    [InlineData("../battle", null, "error.def.table.invalid_package_id")]
+    [InlineData("NUL", null, "error.def.table.invalid_package_id")]
+    [InlineData("battle", "../skill", "error.def.table.invalid_package_output")]
+    [InlineData("battle", @"C:\skill", "error.def.table.invalid_package_output")]
+    [InlineData("battle", "/skill", "error.def.table.invalid_package_output")]
+    public void PackagedTable_RejectsInvalidPaths(string packageId, string output, string messageKey)
+    {
+        var source = SchemaSource.Create("tables.xlsx", "Tables");
+        var table = new RawTable { Name = "TbSkill", Source = source, PackageId = packageId, OutputFile = output };
+
+        var exception = Assert.Throws<LubanException>(() => new DefTable(table));
+        Assert.Equal(messageKey, exception.MessageKey);
+        Assert.Same(source, exception.SchemaOrigin);
     }
 
     [Fact]

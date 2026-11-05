@@ -34,7 +34,7 @@ public static class SchemaLoaderUtil
     }
 
     public static RawTable CreateTable(string schemaFile, string name, string module, string valueType, string index, string mode, string group,
-        string comment, bool readSchemaFromFile, string input, string tags, string outputFileName, string variant = null)
+        string comment, bool readSchemaFromFile, string input, string tags, string outputFileName, string variant = null, string packageId = null)
     {
         var source = SchemaSource.FromPath(schemaFile);
         var p = new RawTable()
@@ -49,6 +49,7 @@ public static class SchemaLoaderUtil
             Comment = comment,
             Mode = ConvertMode(schemaFile, name, mode, index),
             Tags = DefUtil.ParseAttrs(tags),
+            PackageId = packageId,
             OutputFile = outputFileName,
             Variants = DefUtil.ParseVariant(variant ?? ""),
         };

@@ -42,6 +42,8 @@
   "error.def.table.index_not_exist": "表:'{0}' index:'{1}' 字段不存在",
   "error.def.table.no_field": "表:'{0}' 必须定义至少一个字段",
   "error.def.table.default_index_not_exported": "表:'{0}' 默认索引 {1} 不能导出，请指定有效索引",
+  "error.def.table.invalid_package_id": "表 {0} 的 packageId '{1}' 不是有效的目录名",
+  "error.def.table.invalid_package_output": "表 {0} 的 output '{1}' 必须是包内相对路径",
   "error.def.table.unknown_mode": "未知 mode:'{0}'",
   "error.def.table.index_nullable": "表:'{0}' index:'{1}' 不能为可空类型",
   "error.def.table.index_invalid_type": "表:'{0}' index:'{1}' 的类型:'{2}' 不能作为 index",

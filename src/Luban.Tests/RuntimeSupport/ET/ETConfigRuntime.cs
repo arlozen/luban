@@ -28,6 +28,7 @@ namespace ET
     public interface IConfigJsonDataProvider
     {
         JSONNode GetJsonNode(string name);
+        JSONNode GetJsonNode(string packageId, string dataKey);
     }
 
     public abstract class Singleton<T> where T : Singleton<T>
@@ -47,6 +48,11 @@ namespace ET
         public FileConfigJsonDataProvider(string dataDir)
         {
             _dataDir = dataDir;
+        }
+
+        public JSONNode GetJsonNode(string packageId, string dataKey)
+        {
+            return GetJsonNode(System.IO.Path.Combine(packageId, dataKey));
         }
 
         public JSONNode GetJsonNode(string name)

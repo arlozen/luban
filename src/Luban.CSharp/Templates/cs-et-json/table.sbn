@@ -4,6 +4,10 @@ using Luban.SimpleJSON;
 {{
     key_type = __table.key_ttype
     value_type =  __table.value_ttype
+    provider_args = et_string_literal __table.output_data_file
+    if __table.package_id != ""
+        provider_args = (et_string_literal __table.package_id) + ", " + (et_string_literal __table.data_key)
+    end
 
     func index_type_name
         ret (declaring_type_name $0.type)
@@ -45,7 +49,7 @@ public partial class {{__name}} : global::ET.Singleton<{{__name}}>, global::ET.I
 
     public {{__name}}(global::ET.IConfigJsonDataProvider provider)
     {
-        JSONNode _buf = provider.GetJsonNode("{{__table.output_data_file}}");
+        JSONNode _buf = provider.GetJsonNode({{provider_args}});
         int count = _buf.Count;
         _dataMap = new System.Collections.Generic.Dictionary<{{declaring_type_name __key_type}}, {{declaring_type_name __value_type}}>(count);
         _dataList = new System.Collections.Generic.List<{{declaring_type_name __value_type}}>(count);
@@ -94,7 +98,7 @@ public partial class {{__name}} : global::ET.Singleton<{{__name}}>, global::ET.I
 
     public {{__name}}(global::ET.IConfigJsonDataProvider provider)
     {
-        JSONNode _buf = provider.GetJsonNode("{{__table.output_data_file}}");
+        JSONNode _buf = provider.GetJsonNode({{provider_args}});
         int count = _buf.Count;
         _dataList = new System.Collections.Generic.List<{{declaring_type_name __value_type}}>(count);
 
@@ -151,7 +155,7 @@ public partial class {{__name}} : global::ET.Singleton<{{__name}}>, global::ET.I
 
     public {{__name}}(global::ET.IConfigJsonDataProvider provider)
     {
-        JSONNode _buf = provider.GetJsonNode("{{__table.output_data_file}}");
+        JSONNode _buf = provider.GetJsonNode({{provider_args}});
         int n = _buf.Count;
         if (n != 1) throw new SerializationException("table mode=one, but size != 1");
         {{deserialize '_data' '_buf[0]' __value_type}}

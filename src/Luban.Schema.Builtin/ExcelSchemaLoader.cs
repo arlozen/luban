@@ -59,7 +59,9 @@ public class ExcelSchemaLoader : SchemaLoaderBase
     private void LoadTableListFromFile(string fileName)
     {
         (var actualFile, var sheetName) = FileUtil.SplitFileAndSheetName(FileUtil.Standardize(fileName));
-        bool hasVariantColumn = ExcelSheetHasColumn(actualFile, sheetName, "variant");
+        var columns = GetExcelSheetColumns(actualFile, sheetName);
+        bool hasVariantColumn = columns?.Contains("variant") == true;
+        bool hasPackageIdColumn = columns?.Contains("package_id") == true;
 
         var fields = new List<RawField>
         {
@@ -77,6 +79,11 @@ public class ExcelSchemaLoader : SchemaLoaderBase
         if (hasVariantColumn)
         {
             fields.Add(new() { Name = "variant", Type = "string" });
+        }
+
+        if (hasPackageIdColumn)
+        {
+            fields.Add(new() { Name = "package_id", Type = "string" });
         }
 
         var defTableRecordType = new DefBean(new RawBean()
@@ -127,21 +134,22 @@ public class ExcelSchemaLoader : SchemaLoaderBase
             string tags = (data.GetField("tags") as DString).Value.Trim();
             string outputFile = (data.GetField("output") as DString).Value.Trim();
             string variant = hasVariantColumn ? ((data.GetField("variant") as DString)?.Value?.Trim() ?? "") : "";
+            string packageId = hasPackageIdColumn ? (data.GetField("package_id") as DString)?.Value : null;
             // string options = (data.GetField("options") as DString).Value.Trim(); 
-            var table = SchemaLoaderUtil.CreateTable(fileName, name, module, valueType, index, mode, group, comment, readSchemaFromFile, inputFile, tags, outputFile, variant);
+            var table = SchemaLoaderUtil.CreateTable(fileName, name, module, valueType, index, mode, group, comment, readSchemaFromFile, inputFile, tags, outputFile, variant, packageId);
             Collector.Add(table);
         }
         ;
     }
 
-    private static bool ExcelSheetHasColumn(string actualFile, string sheetName, string columnName)
+    private static HashSet<string> GetExcelSheetColumns(string actualFile, string sheetName)
     {
         using var fs = new FileStream(actualFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         foreach (var sheet in SheetLoadUtil.LoadRawSheets(actualFile, sheetName, fs))
         {
-            return sheet.Title != null && sheet.Title.SubTitles.ContainsKey(columnName);
+            return sheet.Title?.SubTitles.Keys.ToHashSet();
         }
-        return false;
+        return null;
     }
 
     private void LoadEnumListFromFile(string fileName)

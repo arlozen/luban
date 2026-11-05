@@ -47,6 +47,8 @@ public class RawTable
 
     public List<string> InputFiles { get; set; } = new();
 
+    public string PackageId { get; set; }
+
     public string OutputFile { get; set; }
 
     /// <summary>
