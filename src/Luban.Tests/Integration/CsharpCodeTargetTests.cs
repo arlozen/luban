@@ -53,6 +53,46 @@ public class CsharpCodeTargetTests
         Assert.True(Directory.GetFiles(ws.CodeDir, "*.cs", SearchOption.AllDirectories).Length > 0);
     }
 
+    [Fact]
+    public void EtJson_AggregatedTablesUsePackageIdWhileTypesUseSchemaPackage()
+    {
+        using var ws = new TempWorkspace();
+        var packages = Path.Combine(ws.Root, "Packages");
+        var aggregate = Directory.CreateDirectory(Path.Combine(packages, "cn.etetet.luban")).FullName;
+        var common = Directory.CreateDirectory(Path.Combine(packages, "cn.etetet.common")).FullName;
+        var schema = XDocument.Load(TestPaths.Fixture("core/Defines/schema.xml"));
+        var tables = new XElement("module", new XAttribute("name", ""));
+        foreach (var table in schema.Root.Elements("table").ToList())
+        {
+            table.SetAttributeValue("packageId", "cn.etetet.business");
+            table.Remove();
+            tables.Add(table);
+        }
+
+        var tablePath = Path.Combine(aggregate, "tables.xml");
+        var typePath = Path.Combine(common, "types.xml");
+        new XDocument(tables).Save(tablePath);
+        schema.Save(typePath);
+        var config = JsonNode.Parse(File.ReadAllText(TestPaths.FixtureConf("core")));
+        config["schemaFiles"] = new JsonArray(
+            new JsonObject { ["fileName"] = tablePath, ["type"] = "" },
+            new JsonObject { ["fileName"] = typePath, ["type"] = "" });
+        config["dataDir"] = TestPaths.Fixture("core/Data");
+        var configPath = Path.Combine(aggregate, "luban.conf");
+        File.WriteAllText(configPath, config.ToJsonString());
+
+        LubanRunner.Run(
+            configPath,
+            codeTargets: new[] { "cs-et-json" },
+            outputCodeDir: ws.CodeDir,
+            extraOptions: new Dictionary<string, string> { ["cs-et-json.schemaPackagesRoot"] = packages });
+
+        Assert.True(File.Exists(Path.Combine(ws.CodeDir, "cn.etetet.business", "TbItem.cs")));
+        Assert.True(File.Exists(Path.Combine(ws.CodeDir, "cn.etetet.common", "Item.cs")));
+        Assert.True(File.Exists(Path.Combine(ws.CodeDir, "cn.etetet.common", "Quality.cs")));
+        Assert.False(Directory.Exists(Path.Combine(ws.CodeDir, "cn.etetet.luban")));
+    }
+
     [Theory]
     [InlineData("package-tables.xlsx", true)]
     [InlineData("legacy-tables.xlsx", false)]
@@ -151,7 +191,8 @@ public class CsharpCodeTargetTests
         var tbItemType = tbItem.GetType();
         var asm = tbItemType.Assembly;
 
-        var ctor = tbItemType.GetConstructors().Single();
+        var ctor = tbItemType.GetConstructor(new[] { asm.GetType("ET.IConfigJsonDataProvider") });
+        Assert.NotNull(ctor);
         var ctorParam = ctor.GetParameters().Single();
         Assert.Equal("IConfigJsonDataProvider", ctorParam.ParameterType.Name);
         Assert.Equal("ET", ctorParam.ParameterType.Namespace);

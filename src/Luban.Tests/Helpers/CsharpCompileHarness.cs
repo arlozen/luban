@@ -46,7 +46,8 @@ public static class CsharpCompileHarness
         var categories = new Dictionary<string, object>(StringComparer.Ordinal);
         foreach (var tableType in tableTypes)
         {
-            var ctor = tableType.GetConstructors().Single();
+            var ctor = tableType.GetConstructor(new[] { asm.GetType("ET.IConfigJsonDataProvider") })
+                ?? throw new InvalidOperationException($"Provider constructor not found on {tableType.FullName}");
             categories.Add(tableType.Name, ctor.Invoke(new[] { provider }));
         }
 

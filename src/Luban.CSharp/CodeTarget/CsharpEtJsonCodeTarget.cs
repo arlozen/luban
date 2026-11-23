@@ -36,8 +36,18 @@ public class CsharpEtJsonCodeTarget : CsharpCodeTargetBase
     protected override string GetTypeOutputPath(DefTypeBase type)
     {
         string typePath = base.GetTypeOutputPath(type);
-        if (!EnvManager.Current.TryGetOption(Name, "schemaPackagesRoot", false, out string packagesRoot)
-            || string.IsNullOrEmpty(type.Source?.File))
+        if (!EnvManager.Current.TryGetOption(Name, "schemaPackagesRoot", false, out string packagesRoot))
+        {
+            return typePath;
+        }
+
+        // Aggregated table schemas no longer reside in their owning packages.
+        if (type is DefTable table && !string.IsNullOrEmpty(table.PackageId))
+        {
+            return $"{table.PackageId}/{typePath}";
+        }
+
+        if (string.IsNullOrEmpty(type.Source?.File))
         {
             return typePath;
         }
