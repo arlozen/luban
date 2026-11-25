@@ -210,7 +210,7 @@
   "error.codegen.invalid_bean_name": "bean `{0}` 的名称非法",
   "error.codegen.field_preserved_keyword": "字段 `{0}::{1}` 的名称包含保留关键字",
   "error.codegen.invalid_field_name": "字段 `{0}::{1}` 的名称非法",
-  "error.codegen.et_json_member_conflict": "字段 `{0}::{1}` 与 cs-et-json 生成的成员 `{2}` 冲突",
+  "error.codegen.et_json_member_conflict": "字段 `{0}::{1}` 与 ET JSON 生成的成员 `{2}` 冲突",
   "error.codegen.enum_preserved_keyword": "枚举 `{0}` 的名称是保留关键字",
   "error.codegen.enum_namespace_preserved_keyword": "枚举 `{0}` 的命名空间包含保留关键字",
   "error.codegen.invalid_enum_name": "枚举 `{0}` 的名称非法",

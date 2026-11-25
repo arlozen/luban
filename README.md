@@ -43,9 +43,18 @@ luban标准化了游戏配置开发工作流，可以极大提升策划和程序
 
 ## ET JSON 加载
 
-使用 `-c cs-et-json -d json` 生成 ET 配置。生成代码使用 `System.Text.Json`，仅依赖 .NET 标准库和 ET 契约，无需 Luban 运行时或 SimpleJSON。根 bean 不继承 `BeanBase`，仍保留 `ET.IConfig`、`__ID__` 和 `GetTypeId()`（结构体保持原有行为）。
+使用以下任一目标生成 ET 配置，数据格式均为 `-d json`：
 
-每个表通过以下 `ET.IConfigJsonDataProvider` 接口读取数据，传入的名称省略 `.json` 后缀；分包表使用双参数重载：
+| 代码目标 | JSON 依赖 | bean 构造和反序列化入口 |
+| --- | --- | --- |
+| `-c cs-et-dotnet-json` | `System.Text.Json` | `JsonElement` |
+| `-c cs-et-newtonsoft-json` | `Newtonsoft.Json` | `JToken` |
+
+两个目标均无需 Luban 运行时或 SimpleJSON。根 bean 不继承 `BeanBase`，仍保留 `ET.IConfig`、`__ID__` 和 `GetTypeId()`（结构体保持原有行为）。
+
+每个表通过项目提供的 `ET.IConfigJsonDataProvider` 接口读取数据，传入的名称省略 `.json` 后缀；分包表使用双参数重载。根据所选目标实现对应的接口契约。
+
+`cs-et-dotnet-json`：
 
 ```csharp
 System.Text.Json.JsonElement GetJsonElement(string name);
@@ -54,11 +63,22 @@ System.Text.Json.JsonElement GetJsonElement(string packageId, string dataKey);
 
 提供器返回的 `JsonElement` 必须在表构造期间有效。若提供器内部释放 `JsonDocument`，应返回 `document.RootElement.Clone()`。生成的 bean 不保留输入 JSON，构造完成后即可释放调用方的文档。
 
+`cs-et-newtonsoft-json`：
+
+```csharp
+Newtonsoft.Json.Linq.JArray GetJsonArray(string name);
+Newtonsoft.Json.Linq.JArray GetJsonArray(string packageId, string dataKey);
+```
+
+提供器返回整张表的 JSON 数组，生成的 bean 通过 `JObject` 按字段读取数据，不保留输入节点。建议在解析时使用 `JsonTextReader.DateParseHandling = DateParseHandling.None`，避免日期形式的字符串被自动转换。客户端需要引用 `Newtonsoft.Json`。
+
 加载器先构造并注册所有表的 `ET.Singleton<T>` 实例，再逐表调用 `ResolveRef()`，完成后即可读取 `_Ref` 成员。表类型元数据通过 `ET.IConfigCategory.ConfigType` 获取。
 
 表和 bean 的 `OnAfterDeserialize()` 在各自构造时调用，此时跨表引用尚未解析。
 
-从旧版迁移时，需将提供器的两个 `GetJsonNode` 重载改为上述 `GetJsonElement` 方法，将 bean 构造及反序列化入口参数改为 `JsonElement`，并调整依赖 `Luban.BeanBase`、`Luban.ITypeId` 或 `Luban.SerializationException` 的调用。未知 `$type` 和单行表行数错误改为抛出 `System.Text.Json.JsonException`。
+原 `cs-et-json` 已重命名为 `cs-et-dotnet-json`，旧目标名称不再注册；命令行和扩展选项前缀（如 `cs-et-dotnet-json.schemaPackagesRoot`）需要同步更新。选择 Newtonsoft 时，扩展选项前缀为 `cs-et-newtonsoft-json`，并需同步调整提供器和 bean 入口的 JSON 类型。
+
+从更早的 SimpleJSON 版本迁移时，还需将提供器的两个 `GetJsonNode` 重载改为所选目标对应的方法，并调整依赖 `Luban.BeanBase`、`Luban.ITypeId` 或 `Luban.SerializationException` 的调用。未知 `$type` 和单行表行数错误分别使用所选库的 `System.Text.Json.JsonException` 或 `Newtonsoft.Json.JsonException`。
 
 ## 开发者：运行测试
 

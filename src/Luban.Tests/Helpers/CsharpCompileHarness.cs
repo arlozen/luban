@@ -196,7 +196,7 @@ public static class CsharpCompileHarness
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <TargetFramework>net8.0</TargetFramework>
-                <ImplicitUsings>{(codeTarget == "cs-et-json" ? "disable" : "enable")}</ImplicitUsings>
+                <ImplicitUsings>{(codeTarget.StartsWith("cs-et-", StringComparison.Ordinal) ? "disable" : "enable")}</ImplicitUsings>
                 <Nullable>disable</Nullable>
                 <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
                 <OutputType>Library</OutputType>
@@ -211,17 +211,21 @@ public static class CsharpCompileHarness
 
     private static void CopyRuntime(string workDir, string codeTarget)
     {
-        var runtimeSrc = codeTarget == "cs-et-json"
-            ? Path.Combine(TestPaths.RuntimeSupportRoot, "ET")
-            : TestPaths.RuntimeSupportRoot;
+        var runtimeSrc = TestPaths.RuntimeSupportRoot;
+        bool isEt = codeTarget.StartsWith("cs-et-", StringComparison.Ordinal);
+        string providerDir = codeTarget == "cs-et-newtonsoft-json" ? "ET.NewtonsoftJson" : "ET.DotNetJson";
         foreach (var file in Directory.GetFiles(runtimeSrc, "*.cs", SearchOption.AllDirectories))
         {
-            if (file.Contains("Unity", StringComparison.OrdinalIgnoreCase))
+            var relative = Path.GetRelativePath(runtimeSrc, file);
+            var rootDir = relative.Split(Path.DirectorySeparatorChar)[0];
+            bool includeRuntime = isEt
+                ? rootDir == "ET" || rootDir == providerDir
+                : !rootDir.StartsWith("ET", StringComparison.Ordinal);
+            if (!includeRuntime || file.Contains("Unity", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
-            var relative = Path.GetRelativePath(runtimeSrc, file);
             var dest = Path.Combine(workDir, "Runtime", relative);
             Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
             File.Copy(file, dest, overwrite: true);

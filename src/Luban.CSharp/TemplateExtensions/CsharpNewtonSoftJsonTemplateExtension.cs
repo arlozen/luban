@@ -27,6 +27,10 @@ internal class CsharpNewtonSoftJsonTemplateExtension : ScriptObject
 {
     public static string Deserialize(string fieldName, string jsonVar, TType type)
     {
+        if (type.IsNullable)
+        {
+            return $"{{var _j = {jsonVar}; if (_j != null && _j.Type != JTokenType.Null) {{ {type.Apply(NewtonSoftJsonDeserializeVisitor.Ins, "_j", fieldName, 0)} }} else {{ {fieldName} = null; }} }}";
+        }
         return type.Apply(NewtonSoftJsonDeserializeVisitor.Ins, jsonVar, fieldName, 0);
     }
 
@@ -34,7 +38,7 @@ internal class CsharpNewtonSoftJsonTemplateExtension : ScriptObject
     {
         if (type.IsNullable)
         {
-            return $"{{if ({jsonVar}.TryGetValue(\"{jsonFieldName}\", out var _j)) {{ {type.Apply(NewtonSoftJsonDeserializeVisitor.Ins, "_j", fieldName, 0)} }} else {{ {fieldName} = null; }} }}";
+            return $"{{if ({jsonVar}.TryGetValue(\"{jsonFieldName}\", out var _j) && _j.Type != JTokenType.Null) {{ {type.Apply(NewtonSoftJsonDeserializeVisitor.Ins, "_j", fieldName, 0)} }} else {{ {fieldName} = null; }} }}";
         }
         else
         {

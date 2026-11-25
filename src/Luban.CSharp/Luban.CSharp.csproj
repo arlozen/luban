@@ -40,7 +40,7 @@
     <ItemGroup>
       <Folder Include="Templates\common\" />
       <Folder Include="Templates\cs-editor-json\" />
-      <Folder Include="Templates\cs-et-json\" />
+      <Folder Include="Templates\cs-et-dotnet-json\" />
     </ItemGroup>
 
     <ItemGroup>
@@ -89,10 +89,16 @@
       <None Update="Templates\cs-simple-json\tables.sbn">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>
-      <None Update="Templates\cs-et-json\bean.sbn">
+      <None Update="Templates\cs-et-newtonsoft-json\bean.sbn">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>
-      <None Update="Templates\cs-et-json\table.sbn">
+      <None Update="Templates\cs-et-newtonsoft-json\table.sbn">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+      <None Update="Templates\cs-et-dotnet-json\bean.sbn">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+      <None Update="Templates\cs-et-dotnet-json\table.sbn">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>
       <None Update="Templates\common\cs\enum.sbn">

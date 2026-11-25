@@ -1,0 +1,203 @@
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+{{
+    parent_def_type = __bean.parent_def_type
+    export_fields = __bean.export_fields
+    hierarchy_export_fields = __bean.hierarchy_export_fields
+    struct_refs = []
+    if __bean.is_value_type
+        for field in export_fields
+            if (can_generate_ref field) || (can_generate_collection_ref field)
+                struct_refs = array.add struct_refs field
+            end
+        end
+    end
+}}
+
+{{namespace_with_grace_begin __namespace_with_top_module}}
+{{~if __bean.comment != '' ~}}
+/// <summary>
+/// {{escape_comment __bean.comment}}
+/// </summary>
+{{~end~}}
+{{~
+func get_ref_name
+    ret (format_property_name __code_style $0.name) + '_Ref'
+end
+
+func get_ref_type_name
+    field = $0
+    if can_generate_ref field
+        ret declaring_type_name (get_ref_type field)
+    end
+    ret declaring_collection_ref_name field.ctype
+end
+
+func get_index_var_name
+    ret (format_property_name __code_style $0.name) + '_Index'
+end
+
+func generate_resolve_field_ref
+    field = $0
+    fieldName = format_property_name __code_style field.name
+    refName = get_ref_name field
+    if __bean.is_value_type
+        refName = '__lubanResolvedRefs.' + refName
+    end
+    refTable = get_ref_table field
+    if can_generate_ref field
+        tableTypeName = 'global::' + refTable.full_name_with_top_module
+        if field.is_nullable
+            ret refName + ' = ' + fieldName + '!= null ? ' + tableTypeName + '.Instance.GetOrDefault(' + (get_value_of_nullable_type field.ctype fieldName) + ') : default;'
+        else
+            ret refName + ' = ' + tableTypeName + '.Instance.GetOrDefault(' + fieldName + ');'
+        end
+    else if can_generate_collection_ref field
+        collection_ref_table = get_collection_ref_table field
+        tableTypeName = 'global::' + collection_ref_table.full_name_with_top_module
+        if field.ctype.type_name == 'list' || field.ctype.type_name == 'set'
+            line1 = refName + ' = new ' + (declaring_collection_ref_name field.ctype) + '();' + '\n'
+            line2 = 'foreach (var _v in ' + fieldName + ') { ' + refName + '.Add(' + tableTypeName + '.Instance.GetOrDefault(_v)); }' + '\n'
+            ret line1 + line2
+        else if field.ctype.type_name == 'array'
+            line1 = refName + ' = new ' + (declaring_type_name collection_ref_table.value_ttype) + '[' + fieldName + '.Length];' + '\n'
+            line2 = 'for (int _i = 0; _i < ' + fieldName + '.Length; _i++) { ' + refName + '[_i] = ' + tableTypeName + '.Instance.GetOrDefault(' + fieldName + '[_i]); }' + '\n'
+            ret line1 + line2
+        else if field.ctype.type_name == 'map'
+            line1 = refName + ' = new ' + (declaring_collection_ref_name field.ctype) + '();' + '\n'
+            line2 = 'foreach (var kvp in ' + fieldName + ') { ' + refName + '.Add(kvp.Key, ' + tableTypeName + '.Instance.GetOrDefault(kvp.Value)); }' + '\n'
+            ret line1 + line2
+        else
+            ret ''
+        end
+    else
+        if (et_bean_needs_resolve_ref field.ctype)
+            ret fieldName + (et_resolve_ref_call field.ctype)
+        else if (et_bean_needs_resolve_ref field.ctype.element_type) && field.ctype.type_name != 'map'
+            ret 'foreach (var _e in ' + fieldName + ') { _e' + (et_resolve_ref_call field.ctype.element_type) + ' }'
+        else if field.ctype.type_name == 'map' && (et_bean_needs_resolve_ref field.ctype.value_type)
+            ret 'foreach (var _e in ' + fieldName + '.Values) { _e' + (et_resolve_ref_call field.ctype.value_type) + ' }'
+        else
+            ret ''
+        end
+    end
+end
+~}}
+{{~if __bean.is_value_type~}}
+public partial struct {{__name}} : global::ET.IConfig
+{{~else~}}
+public {{class_modifier __bean}} partial class {{__name}} : {{if parent_def_type}}{{__bean.parent}}, {{end}}global::ET.IConfig
+{{~end~}}
+{
+    public {{__name}}(JToken _buf) {{if parent_def_type}} : base(_buf) {{end}}
+    {
+        JObject _obj = (JObject)_buf;
+        {{~if !struct_refs.empty?~}}
+        __lubanResolvedRefs = new __LubanResolvedRefs();
+        {{~end~}}
+        {{~ for field in export_fields
+            fieldName = format_property_name __code_style field.name
+         ~}}
+        {{deserialize_field fieldName '_obj' field.name field.ctype}}
+            {{~if !__bean.is_value_type && (can_generate_ref field)~}}
+        {{get_ref_name field}} = default;
+            {{~end~}}
+            {{~if has_index field~}}
+        foreach(var _v in {{fieldName}})
+        {
+            {{get_index_var_name field}}.Add(_v.{{format_property_name __code_style (get_index_field field).name}}, _v);
+        }
+            {{~end~}}
+        {{~end~}}
+        OnAfterDeserialize();
+    }
+
+    public static {{__name}} Deserialize{{__name}}(JToken _buf)
+    {
+    {{~if __bean.is_abstract_type~}}
+        switch ((string)_buf["$type"])
+        {
+        {{~for child in __bean.hierarchy_not_abstract_children~}}
+            case "{{impl_data_type child __bean}}": return new {{child.full_name}}(_buf);
+        {{~end~}}
+            default: throw new JsonException("Unknown {{__name}} $type");
+        }
+    {{~else~}}
+        return new {{__bean.full_name}}(_buf);
+    {{~end~}}
+    }
+
+    {{~ for field in export_fields ~}}
+{{~if field.comment != '' ~}}
+    /// <summary>
+    /// {{escape_comment field.comment}}
+    /// </summary>
+{{~end~}}
+    public readonly {{declaring_type_name field.ctype}} {{format_property_name __code_style field.name}};
+    {{~if (can_generate_ref field) || (can_generate_collection_ref field)
+        refType = get_ref_type_name field
+        refName = get_ref_name field
+    ~}}
+        {{~if __bean.is_value_type~}}
+    public {{refType}} {{refName}} => __lubanResolvedRefs == null ? default : __lubanResolvedRefs.{{refName}};
+        {{~else~}}
+    public {{refType}} {{refName}};
+        {{~end~}}
+    {{~end~}}
+   {{~if has_index field
+        indexMapType = get_index_map_type field
+   ~}}
+    public readonly {{declaring_type_name indexMapType}} {{get_index_var_name field}} = new {{declaring_type_name indexMapType}}();
+   {{~end~}}
+   {{~end~}}
+
+{{~if !struct_refs.empty?~}}
+    // All copies of the deserialized row share its resolved references.
+    private readonly __LubanResolvedRefs __lubanResolvedRefs;
+
+    private sealed class __LubanResolvedRefs
+    {
+        {{~for field in struct_refs~}}
+        public {{get_ref_type_name field}} {{get_ref_name field}};
+        {{~end~}}
+    }
+{{~end~}}
+
+{{~if __bean.is_abstract_type && !parent_def_type~}}
+    public abstract int GetTypeId();
+{{~else if !__bean.is_abstract_type && !__bean.is_value_type~}}
+    public const int __ID__ = {{__bean.id}};
+    public {{if parent_def_type}}override {{end}}int GetTypeId() => __ID__;
+{{~end~}}
+
+    public {{method_modifier __bean}} void ResolveRef()
+    {
+        {{~if !struct_refs.empty?~}}
+        if (__lubanResolvedRefs == null)
+        {
+            return;
+        }
+        {{~end~}}
+        {{~if parent_def_type~}}
+        base.ResolveRef();
+        {{~end~}}
+        {{~for field in export_fields~}}
+            {{~ line = generate_resolve_field_ref field ~}}
+                {{~ if line != ''~}}
+        {{line}}
+                {{~end~}}
+        {{~end~}}
+    }
+
+    public override string ToString()
+    {
+        return "{{full_name}}{ "
+    {{~for field in hierarchy_export_fields ~}}
+        + "{{format_field_name __code_style field.name}}:" + {{et_to_pretty_string (format_property_name __code_style field.name) field.ctype}} + ","
+    {{~end~}}
+        + "}";
+    }
+
+    partial void OnAfterDeserialize();
+}
+{{namespace_with_grace_end __namespace_with_top_module}}

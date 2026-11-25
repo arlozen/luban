@@ -42,6 +42,28 @@ Since **5.0.0**, Luban is **AI Native**: official Agent Skills, machine-readable
 
 AI assets in this repo: [`ai/`](./ai/README.md).
 
+## ET JSON loading
+
+Generate ET configs with `-c cs-et-dotnet-json -d json` for `System.Text.Json`, or `-c cs-et-newtonsoft-json -d json` for `Newtonsoft.Json`. Both targets implement ET contracts without a Luban runtime or SimpleJSON dependency. Root beans implement `ET.IConfig`; tables inherit `ET.Singleton<T>` and implement `ET.IConfigCategory`.
+
+Supply `ET.IConfigJsonDataProvider` with the methods matching the selected target:
+
+```csharp
+// cs-et-dotnet-json (bean constructors and deserializers accept JsonElement)
+System.Text.Json.JsonElement GetJsonElement(string name);
+System.Text.Json.JsonElement GetJsonElement(string packageId, string dataKey);
+
+// cs-et-newtonsoft-json (bean constructors and deserializers accept JToken)
+Newtonsoft.Json.Linq.JArray GetJsonArray(string name);
+Newtonsoft.Json.Linq.JArray GetJsonArray(string packageId, string dataKey);
+```
+
+Names omit the `.json` suffix. Packaged tables use the two-argument overload. A returned `JsonElement` must remain valid throughout table construction; use `RootElement.Clone()` if the provider disposes its `JsonDocument`. For Newtonsoft, reference `Newtonsoft.Json` in the consumer and use `DateParseHandling.None` when parsing to preserve date-like strings. Generated beans do not retain input JSON nodes.
+
+Construct and register all table singletons before calling `ResolveRef()` on each table. `OnAfterDeserialize()` runs during construction, before cross-table references are resolved. Unknown `$type` values and invalid single-row table sizes throw the selected library's `JsonException`.
+
+The former `cs-et-json` target has been renamed to `cs-et-dotnet-json` and is no longer registered. Update command lines and option prefixes, including `cs-et-dotnet-json.schemaPackagesRoot`. The Newtonsoft target uses the `cs-et-newtonsoft-json` option prefix and requires the corresponding provider contract above.
+
 ## Developers: running tests
 
 In-repo xUnit integration tests (no dependency on external `luban_examples`):

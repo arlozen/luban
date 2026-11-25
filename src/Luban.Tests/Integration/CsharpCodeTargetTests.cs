@@ -54,8 +54,10 @@ public class CsharpCodeTargetTests
         Assert.True(Directory.GetFiles(ws.CodeDir, "*.cs", SearchOption.AllDirectories).Length > 0);
     }
 
-    [Fact]
-    public void EtJson_AggregatedTablesUsePackageIdWhileTypesUseSchemaPackage()
+    [Theory]
+    [InlineData("cs-et-dotnet-json")]
+    [InlineData("cs-et-newtonsoft-json")]
+    public void EtJson_AggregatedTablesUsePackageIdWhileTypesUseSchemaPackage(string codeTarget)
     {
         using var ws = new TempWorkspace();
         var packages = Path.Combine(ws.Root, "Packages");
@@ -84,9 +86,9 @@ public class CsharpCodeTargetTests
 
         LubanRunner.Run(
             configPath,
-            codeTargets: new[] { "cs-et-json" },
+            codeTargets: new[] { codeTarget },
             outputCodeDir: ws.CodeDir,
-            extraOptions: new Dictionary<string, string> { ["cs-et-json.schemaPackagesRoot"] = packages });
+            extraOptions: new Dictionary<string, string> { [$"{codeTarget}.schemaPackagesRoot"] = packages });
 
         Assert.True(File.Exists(Path.Combine(ws.CodeDir, "cn.etetet.business", "TbItem.cs")));
         Assert.True(File.Exists(Path.Combine(ws.CodeDir, "cn.etetet.common", "Item.cs")));
@@ -95,9 +97,11 @@ public class CsharpCodeTargetTests
     }
 
     [Theory]
-    [InlineData("package-tables.xlsx", true)]
-    [InlineData("legacy-tables.xlsx", false)]
-    public void EtJson_LoadsPackagedAndUnpackagedTablesFromOneGeneration(string workbook, bool hasPackageColumn)
+    [InlineData("cs-et-dotnet-json", "package-tables.xlsx", true)]
+    [InlineData("cs-et-dotnet-json", "legacy-tables.xlsx", false)]
+    [InlineData("cs-et-newtonsoft-json", "package-tables.xlsx", true)]
+    [InlineData("cs-et-newtonsoft-json", "legacy-tables.xlsx", false)]
+    public void EtJson_LoadsPackagedAndUnpackagedTablesFromOneGeneration(string codeTarget, string workbook, bool hasPackageColumn)
     {
         using var ws = new TempWorkspace();
         var schema = XDocument.Load(TestPaths.Fixture("core/Defines/schema.xml"));
@@ -129,7 +133,7 @@ public class CsharpCodeTargetTests
 
         LubanRunner.Run(
             configPath,
-            codeTargets: new[] { "cs-et-json" },
+            codeTargets: new[] { codeTarget },
             dataTargets: new[] { "json" },
             outputCodeDir: ws.CodeDir,
             outputDataDir: ws.DataDir,
@@ -140,16 +144,17 @@ public class CsharpCodeTargetTests
         Assert.True(File.Exists(Path.Combine(ws.DataDir, "com.example.score", "ranked", "scores.json")));
         Assert.True(File.Exists(Path.Combine(ws.DataDir, "tbglobal.json")));
         Assert.False(Directory.Exists(Path.Combine(ws.DataDir, "com.example.fallback")));
+        string providerMethod = codeTarget == "cs-et-newtonsoft-json" ? "GetJsonArray" : "GetJsonElement";
         var itemCall = hasPackageColumn
             ? """provider.GetJsonElement("com.example.battle", "tbitem")"""
             : """provider.GetJsonElement("tbitem")""";
-        Assert.Contains(itemCall, File.ReadAllText(Path.Combine(ws.CodeDir, "TbItem.cs")));
-        Assert.Contains("""provider.GetJsonElement("com.example.score", "ranked/scores")""",
+        Assert.Contains(itemCall.Replace("GetJsonElement", providerMethod), File.ReadAllText(Path.Combine(ws.CodeDir, "TbItem.cs")));
+        Assert.Contains("""provider.GetJsonElement("com.example.score", "ranked/scores")""".Replace("GetJsonElement", providerMethod),
             File.ReadAllText(Path.Combine(ws.CodeDir, "TbScore.cs")));
-        Assert.Contains("""provider.GetJsonElement("tbglobal")""",
+        Assert.Contains("""provider.GetJsonElement("tbglobal")""".Replace("GetJsonElement", providerMethod),
             File.ReadAllText(Path.Combine(ws.CodeDir, "TbGlobal.cs")));
 
-        var categories = CsharpCompileHarness.LoadEtConfigCategories(ws.CodeDir, ws.DataDir, "cs-et-json");
+        var categories = CsharpCompileHarness.LoadEtConfigCategories(ws.CodeDir, ws.DataDir, codeTarget);
         var item = CsharpCompileHarness.Invoke(categories["TbItem"], "Get", 1);
         Assert.Equal("sword", CsharpCompileHarness.GetProp<string>(item, "Name"));
         var score = CsharpCompileHarness.Invoke(categories["TbScore"], "Get", 1, 2);
@@ -173,13 +178,15 @@ public class CsharpCodeTargetTests
         Assert.Same(source, exception.SchemaOrigin);
     }
 
-    [Fact]
-    public void Core_EtJson_GeneratesProviderBasedConfigs()
+    [Theory]
+    [InlineData("cs-et-dotnet-json")]
+    [InlineData("cs-et-newtonsoft-json")]
+    public void Core_EtJson_GeneratesProviderBasedConfigs(string codeTarget)
     {
         using var ws = new TempWorkspace();
         LubanRunner.Run(
             TestPaths.FixtureConf("core"),
-            codeTargets: new[] { "cs-et-json" },
+            codeTargets: new[] { codeTarget },
             dataTargets: new[] { "json" },
             outputCodeDir: ws.CodeDir,
             outputDataDir: ws.DataDir);
@@ -187,12 +194,14 @@ public class CsharpCodeTargetTests
         Assert.Empty(Directory.GetFiles(ws.CodeDir, "Tables.cs", SearchOption.AllDirectories));
         WriteEtPartialExtensions(ws.CodeDir);
 
-        var categories = CsharpCompileHarness.LoadEtConfigCategories(ws.CodeDir, ws.DataDir, "cs-et-json");
+        var categories = CsharpCompileHarness.LoadEtConfigCategories(ws.CodeDir, ws.DataDir, codeTarget);
         var tbItem = categories["TbItem"];
         var tbItemType = tbItem.GetType();
         var asm = tbItemType.Assembly;
         Assert.DoesNotContain(asm.GetTypes(), type => type.Namespace?.StartsWith("Luban", StringComparison.Ordinal) == true);
         Assert.DoesNotContain(asm.GetReferencedAssemblies(), name => name.Name.StartsWith("Luban", StringComparison.Ordinal));
+        string unusedJsonLibrary = codeTarget == "cs-et-newtonsoft-json" ? "System.Text.Json" : "Newtonsoft.Json";
+        Assert.DoesNotContain(asm.GetReferencedAssemblies(), name => name.Name == unusedJsonLibrary);
 
         var ctor = tbItemType.GetConstructor(new[] { asm.GetType("ET.IConfigJsonDataProvider") });
         Assert.NotNull(ctor);
@@ -203,8 +212,8 @@ public class CsharpCodeTargetTests
         Assert.Equal(2, providerMethods.Length);
         Assert.All(providerMethods, method =>
         {
-            Assert.Equal("GetJsonElement", method.Name);
-            Assert.Equal(typeof(JsonElement), method.ReturnType);
+            Assert.Equal(codeTarget == "cs-et-newtonsoft-json" ? "GetJsonArray" : "GetJsonElement", method.Name);
+            Assert.Equal(codeTarget == "cs-et-newtonsoft-json" ? typeof(Newtonsoft.Json.Linq.JArray) : typeof(JsonElement), method.ReturnType);
         });
 
         var categoryInterface = asm.GetType("ET.IConfigCategory");
@@ -255,20 +264,22 @@ public class CsharpCodeTargetTests
         Assert.True(CsharpCompileHarness.GetProp<bool>(tbItem, "EndRefCalled"));
     }
 
-    [Fact]
-    public void EtJson_ResolvesValueTypeRefsThroughSingleton()
+    [Theory]
+    [InlineData("cs-et-dotnet-json")]
+    [InlineData("cs-et-newtonsoft-json")]
+    public void EtJson_ResolvesValueTypeRefsThroughSingleton(string codeTarget)
     {
         using var ws = new TempWorkspace();
         LubanRunner.Run(
             TestPaths.FixtureConf("et-json"),
-            codeTargets: new[] { "cs-et-json" },
+            codeTargets: new[] { codeTarget },
             dataTargets: new[] { "json" },
             outputCodeDir: ws.CodeDir,
             outputDataDir: ws.DataDir);
 
         Assert.Empty(Directory.GetFiles(ws.CodeDir, "Tables.cs", SearchOption.AllDirectories));
 
-        var categories = CsharpCompileHarness.LoadEtConfigCategories(ws.CodeDir, ws.DataDir, "cs-et-json");
+        var categories = CsharpCompileHarness.LoadEtConfigCategories(ws.CodeDir, ws.DataDir, codeTarget);
         var tbReward = categories["TbReward"];
         var reward = CsharpCompileHarness.Invoke(tbReward, "Get", 100);
         Assert.True(reward.GetType().IsValueType);
@@ -291,18 +302,20 @@ public class CsharpCodeTargetTests
         }
     }
 
-    [Fact]
-    public void EtJson_DeserializesNullableFieldsAndArraysWithoutRetainingDocument()
+    [Theory]
+    [InlineData("cs-et-dotnet-json")]
+    [InlineData("cs-et-newtonsoft-json")]
+    public void EtJson_DeserializesNullableFieldsAndArraysWithoutRetainingDocument(string codeTarget)
     {
         using var ws = new TempWorkspace();
         LubanRunner.Run(
             TestPaths.FixtureConf("et-json"),
-            codeTargets: new[] { "cs-et-json" },
+            codeTargets: new[] { codeTarget },
             dataTargets: new[] { "json" },
             outputCodeDir: ws.CodeDir,
             outputDataDir: ws.DataDir);
 
-        var categories = CsharpCompileHarness.LoadEtConfigCategories(ws.CodeDir, ws.DataDir, "cs-et-json");
+        var categories = CsharpCompileHarness.LoadEtConfigCategories(ws.CodeDir, ws.DataDir, codeTarget);
         var data = CsharpCompileHarness.GetProp<object>(categories["TbEtSettings"], "Data");
         var deserialize = data.GetType().GetMethod("DeserializeEtSettings");
         Assert.NotNull(deserialize);
@@ -325,11 +338,7 @@ public class CsharpCodeTargetTests
                 }
             }
 
-            object row;
-            using (var document = JsonDocument.Parse(json.ToJsonString()))
-            {
-                row = deserialize.Invoke(null, new object[] { document.RootElement });
-            }
+            var row = DeserializeEtJson(deserialize, json.ToJsonString(), codeTarget);
 
             foreach (var member in optionalMembers)
             {
@@ -349,11 +358,7 @@ public class CsharpCodeTargetTests
         json["optional_item"] = JsonNode.Parse("""{"id":2,"name":"shield"}""");
         json["optional_reward"] = json["reward"].DeepClone();
         json["optional_item_id"] = 1;
-        object populated;
-        using (var document = JsonDocument.Parse(json.ToJsonString()))
-        {
-            populated = deserialize.Invoke(null, new object[] { document.RootElement });
-        }
+        var populated = DeserializeEtJson(deserialize, json.ToJsonString(), codeTarget);
         CsharpCompileHarness.Invoke(populated, "ResolveRef");
         Assert.Equal(42, CsharpCompileHarness.GetProp<int?>(populated, "OptionalNumber"));
         Assert.Equal("hello", CsharpCompileHarness.GetProp<string>(populated, "OptionalText"));
@@ -364,35 +369,39 @@ public class CsharpCodeTargetTests
         Assert.Same(expectedItem, CsharpCompileHarness.GetProp<object>(optionalReward, "ItemId_Ref"));
     }
 
-    [Fact]
-    public void EtJson_UsesStandardJsonExceptions()
+    [Theory]
+    [InlineData("cs-et-dotnet-json")]
+    [InlineData("cs-et-newtonsoft-json")]
+    public void EtJson_UsesStandardJsonExceptions(string codeTarget)
     {
         using var ws = new TempWorkspace();
         LubanRunner.Run(
             TestPaths.FixtureConf("core"),
-            codeTargets: new[] { "cs-et-json" },
+            codeTargets: new[] { codeTarget },
             dataTargets: new[] { "json" },
             outputCodeDir: ws.CodeDir,
             outputDataDir: ws.DataDir);
 
-        var categories = CsharpCompileHarness.LoadEtConfigCategories(ws.CodeDir, ws.DataDir, "cs-et-json");
+        var categories = CsharpCompileHarness.LoadEtConfigCategories(ws.CodeDir, ws.DataDir, codeTarget);
         var asm = categories["TbGlobal"].GetType().Assembly;
-        using var document = JsonDocument.Parse("""{"$type":"MissingShape"}""");
         var deserialize = asm.GetType("cfg.Shape").GetMethod("DeserializeShape");
-        var unknownType = Assert.Throws<TargetInvocationException>(() => deserialize.Invoke(null, new object[] { document.RootElement }));
-        Assert.IsType<JsonException>(unknownType.InnerException);
+        var unknownType = Assert.Throws<TargetInvocationException>(() => DeserializeEtJson(deserialize, """{"$type":"MissingShape"}""", codeTarget));
+        Type exceptionType = codeTarget == "cs-et-newtonsoft-json" ? typeof(Newtonsoft.Json.JsonException) : typeof(JsonException);
+        Assert.Equal(exceptionType, unknownType.InnerException.GetType());
 
         var provider = Activator.CreateInstance(asm.GetType("ET.FileConfigJsonDataProvider"), new object[] { ws.DataDir });
         foreach (var rows in new[] { "[]", "[{},{}]" })
         {
             File.WriteAllText(Path.Combine(ws.DataDir, "tbglobal.json"), rows);
             var invalidSize = Assert.Throws<TargetInvocationException>(() => Activator.CreateInstance(categories["TbGlobal"].GetType(), new[] { provider }));
-            Assert.IsType<JsonException>(invalidSize.InnerException);
+            Assert.Equal(exceptionType, invalidSize.InnerException.GetType());
         }
     }
 
-    [Fact]
-    public void EtJson_ReportsAfterDeserializeHookNameConflict()
+    [Theory]
+    [InlineData("cs-et-dotnet-json")]
+    [InlineData("cs-et-newtonsoft-json")]
+    public void EtJson_ReportsAfterDeserializeHookNameConflict(string codeTarget)
     {
         using var ws = new TempWorkspace();
         var confPath = Path.Combine(ws.Root, "luban.conf");
@@ -410,7 +419,7 @@ public class CsharpCodeTargetTests
             """);
 
         var result = LubanRunner.Run(confPath,
-            codeTargets: new[] { "cs-et-json" },
+            codeTargets: new[] { codeTarget },
             outputCodeDir: ws.CodeDir,
             throwOnError: false);
 
@@ -419,6 +428,17 @@ public class CsharpCodeTargetTests
             : result.Exception;
         var error = Assert.IsType<LubanException>(failure);
         Assert.Equal("error.codegen.et_json_member_conflict", error.MessageKey);
+    }
+
+    private static object DeserializeEtJson(MethodInfo deserialize, string json, string codeTarget)
+    {
+        if (codeTarget == "cs-et-newtonsoft-json")
+        {
+            return deserialize.Invoke(null, new object[] { Newtonsoft.Json.Linq.JToken.Parse(json) });
+        }
+
+        using var document = JsonDocument.Parse(json);
+        return deserialize.Invoke(null, new object[] { document.RootElement });
     }
 
     private static void WriteEtPartialExtensions(string codeDir)

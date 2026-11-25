@@ -18,7 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-using Luban.CodeTarget;
 using Luban.CSharp.TemplateExtensions;
 using Luban.Defs;
 using Luban.Diagnostics;
@@ -28,8 +27,7 @@ using Scriban.Runtime;
 
 namespace Luban.CSharp.CodeTarget;
 
-[CodeTarget("cs-et-json")]
-public class CsharpEtJsonCodeTarget : CsharpCodeTargetBase
+public abstract class CsharpEtJsonCodeTargetBase : CsharpCodeTargetBase
 {
     protected override bool NeedGenerateTables => false;
 
@@ -84,7 +82,6 @@ public class CsharpEtJsonCodeTarget : CsharpCodeTargetBase
     protected override void OnCreateTemplateContext(TemplateContext ctx)
     {
         base.OnCreateTemplateContext(ctx);
-        ctx.PushGlobal(new CsharpDotNetJsonTemplateExtension());
         ctx.PushGlobal(new EtReferenceTemplateExtension());
     }
 

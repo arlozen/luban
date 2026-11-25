@@ -210,7 +210,7 @@
   "error.codegen.invalid_bean_name": "the name of bean `{0}` is invalid",
   "error.codegen.field_preserved_keyword": "the name of field `{0}::{1}` contains a preserved keyword",
   "error.codegen.invalid_field_name": "the name of field `{0}::{1}` is invalid",
-  "error.codegen.et_json_member_conflict": "field `{0}::{1}` conflicts with generated cs-et-json member `{2}`",
+  "error.codegen.et_json_member_conflict": "field `{0}::{1}` conflicts with generated ET JSON member `{2}`",
   "error.codegen.enum_preserved_keyword": "the name of enum `{0}` is a preserved keyword",
   "error.codegen.enum_namespace_preserved_keyword": "the namespace of enum `{0}` contains a preserved keyword",
   "error.codegen.invalid_enum_name": "the name of enum `{0}` is invalid",
