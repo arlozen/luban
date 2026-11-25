@@ -76,7 +76,8 @@ public static class CsharpCompileHarness
         var csprojPath = Path.Combine(workDir, "GeneratedConsumer.csproj");
         File.WriteAllText(csprojPath, BuildCsproj(codeTarget, id), Encoding.UTF8);
 
-        var build = RunDotnet(["build", csprojPath, "-c", "Release", "-v", "q"]);
+        // Reused MSBuild nodes can retain redirected pipes after a multi-target build exits on Windows.
+        var build = RunDotnet(["build", csprojPath, "-c", "Release", "-v", "q", "--disable-build-servers"]);
         Assert.True(build.ExitCode == 0, $"dotnet build failed:\n{build.Output}");
 
         var dll = Path.Combine(workDir, "bin", "Release", "net8.0", $"GeneratedConsumer_{id}.dll");
@@ -192,11 +193,12 @@ public static class CsharpCompileHarness
             ? """    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />"""
             : "";
 
+        bool standalone = codeTarget == "cs-standalone-newtonsoft-json";
         return $"""
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
-                <TargetFramework>net8.0</TargetFramework>
-                <ImplicitUsings>{(codeTarget.StartsWith("cs-et-", StringComparison.Ordinal) ? "disable" : "enable")}</ImplicitUsings>
+                {(standalone ? "<TargetFrameworks>netstandard2.1;net8.0</TargetFrameworks><LangVersion>9.0</LangVersion>" : "<TargetFramework>net8.0</TargetFramework>")}
+                <ImplicitUsings>{((standalone || codeTarget.StartsWith("cs-et-", StringComparison.Ordinal)) ? "disable" : "enable")}</ImplicitUsings>
                 <Nullable>disable</Nullable>
                 <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
                 <OutputType>Library</OutputType>
@@ -211,6 +213,11 @@ public static class CsharpCompileHarness
 
     private static void CopyRuntime(string workDir, string codeTarget)
     {
+        if (codeTarget == "cs-standalone-newtonsoft-json")
+        {
+            return;
+        }
+
         var runtimeSrc = TestPaths.RuntimeSupportRoot;
         bool isEt = codeTarget.StartsWith("cs-et-", StringComparison.Ordinal);
         string providerDir = codeTarget == "cs-et-newtonsoft-json" ? "ET.NewtonsoftJson" : "ET.DotNetJson";

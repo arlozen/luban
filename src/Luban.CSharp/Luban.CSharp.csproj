@@ -44,6 +44,9 @@
     </ItemGroup>
 
     <ItemGroup>
+      <None Update="Templates\cs-standalone-newtonsoft-json\*.sbn">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
       <None Update="Templates\cs-bin\bean.sbn">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>

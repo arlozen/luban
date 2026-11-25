@@ -42,6 +42,30 @@ Since **5.0.0**, Luban is **AI Native**: official Agent Skills, machine-readable
 
 AI assets in this repo: [`ai/`](./ai/README.md).
 
+## Standalone C# Newtonsoft JSON loading
+
+Generate with `-c cs-standalone-newtonsoft-json -d json` for C# config code that depends only on the standard library and `Newtonsoft.Json`, compatible with `.NET Standard 2.1 / C# 9`. Add all generated `.cs` files to the consumer project, reference `Newtonsoft.Json`, and load through the generated `Tables`:
+
+```csharp
+using System.IO;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+
+var tables = new cfg.Tables(name =>
+{
+    using var text = File.OpenText(Path.Combine("Data", name + ".json"));
+    using var reader = new JsonTextReader(text)
+    {
+        DateParseHandling = DateParseHandling.None,
+    };
+    return JArray.Load(reader);
+});
+```
+
+`cfg` is the configured `topModule`. The loader receives data file names without `.json` and returns each table's JSON array. `Tables` resolves references after all tables have been constructed; beans do not retain input JSON nodes. Set `DateParseHandling.None` to preserve date-like strings.
+
+This target preserves readonly data fields, type IDs, inheritance, polymorphism, table queries and indexes, and scalar and collection references resolved through `ResolveRef(tables)`. Struct copies share resolved references. Unknown `$type` values and invalid single-row table sizes throw `Newtonsoft.Json.JsonException`. Default output needs no Luban runtime, ET, or SimpleJSON; consumers supply dependencies for explicitly configured type mappings and custom partial code. The existing `cs-newtonsoft-json` target keeps its original behavior.
+
 ## ET JSON loading
 
 Generate ET configs with `-c cs-et-dotnet-json -d json` for `System.Text.Json`, or `-c cs-et-newtonsoft-json -d json` for `Newtonsoft.Json`. Both targets implement ET contracts without a Luban runtime or SimpleJSON dependency. Root beans implement `ET.IConfig`; tables inherit `ET.Singleton<T>` and implement `ET.IConfigCategory`.

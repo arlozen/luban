@@ -41,6 +41,30 @@ luban标准化了游戏配置开发工作流，可以极大提升策划和程序
 
 仓库内 AI 资源见 [`ai/`](./ai/README.md)。
 
+## 独立 C# Newtonsoft JSON 加载
+
+使用 `-c cs-standalone-newtonsoft-json -d json` 生成仅依赖标准库和 `Newtonsoft.Json` 的 C# 配置代码，兼容 `.NET Standard 2.1 / C# 9`。将生成的全部 `.cs` 文件加入客户端项目并引用 `Newtonsoft.Json`，即可通过生成的 `Tables` 加载配置：
+
+```csharp
+using System.IO;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+
+var tables = new cfg.Tables(name =>
+{
+    using var text = File.OpenText(Path.Combine("Data", name + ".json"));
+    using var reader = new JsonTextReader(text)
+    {
+        DateParseHandling = DateParseHandling.None,
+    };
+    return JArray.Load(reader);
+});
+```
+
+`cfg` 对应配置中的 `topModule`。loader 接收不含 `.json` 后缀的数据文件名，返回整张表的 JSON 数组；`Tables` 在所有表构造完成后统一解析引用，bean 不保留输入 JSON 节点。设置 `DateParseHandling.None` 可保留日期形式的字符串。
+
+此目标保留只读数据字段、类型 ID、继承、多态、表查询和索引，以及通过 `ResolveRef(tables)` 解析的标量与集合引用；struct 副本共享引用解析结果。未知 `$type` 和单行表行数错误抛出 `Newtonsoft.Json.JsonException`。默认代码无需 Luban 运行时、ET 或 SimpleJSON；显式配置的类型映射和自定义 partial 代码所需依赖由调用方提供。现有 `cs-newtonsoft-json` 目标保持原有行为。
+
 ## ET JSON 加载
 
 使用以下任一目标生成 ET 配置，数据格式均为 `-d json`：
