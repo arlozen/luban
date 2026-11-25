@@ -1,6 +1,6 @@
 // Copyright 2025 Code Philosophy
 
-using Luban.SimpleJSON;
+using System.Text.Json;
 
 namespace ET
 {
@@ -27,8 +27,8 @@ namespace ET
 
     public interface IConfigJsonDataProvider
     {
-        JSONNode GetJsonNode(string name);
-        JSONNode GetJsonNode(string packageId, string dataKey);
+        JsonElement GetJsonElement(string name);
+        JsonElement GetJsonElement(string packageId, string dataKey);
     }
 
     public abstract class Singleton<T> where T : Singleton<T>
@@ -50,15 +50,16 @@ namespace ET
             _dataDir = dataDir;
         }
 
-        public JSONNode GetJsonNode(string packageId, string dataKey)
+        public JsonElement GetJsonElement(string packageId, string dataKey)
         {
-            return GetJsonNode(System.IO.Path.Combine(packageId, dataKey));
+            return GetJsonElement(System.IO.Path.Combine(packageId, dataKey));
         }
 
-        public JSONNode GetJsonNode(string name)
+        public JsonElement GetJsonElement(string name)
         {
             var path = System.IO.Path.Combine(_dataDir, name + ".json");
-            return JSON.Parse(System.IO.File.ReadAllText(path));
+            using var document = JsonDocument.Parse(System.IO.File.ReadAllText(path));
+            return document.RootElement.Clone();
         }
     }
 }

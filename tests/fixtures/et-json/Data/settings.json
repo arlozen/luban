@@ -1,5 +1,10 @@
 {
   "config_type": "settings",
   "reward": { "id": 100, "item_id": 1, "item_ids": [1] },
-  "rewards": [{ "id": 100, "item_id": 1, "item_ids": [1] }]
+  "rewards": [{ "id": 100, "item_id": 1, "item_ids": [1] }],
+  "reward_array": [{ "id": 100, "item_id": 1, "item_ids": [1] }],
+  "reward_map": [["first", { "id": 100, "item_id": 1, "item_ids": [1] }]],
+  "indexed_rewards": [{ "id": 100, "item_id": 1, "item_ids": [1] }],
+  "numbers": [3, 5],
+  "matrix": [[1, 2], [3]]
 }

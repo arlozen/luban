@@ -71,7 +71,7 @@ public static class CsharpCompileHarness
         // Keep collectible ALC alive for the returned object lifetime; unique AssemblyName avoids LoadFrom conflicts.
         alc = new AssemblyLoadContext($"luban-test-{id}", isCollectible: true);
         CopyDirectory(codeDir, Path.Combine(workDir, "Gen"));
-        CopyRuntime(workDir);
+        CopyRuntime(workDir, codeTarget);
 
         var csprojPath = Path.Combine(workDir, "GeneratedConsumer.csproj");
         File.WriteAllText(csprojPath, BuildCsproj(codeTarget, id), Encoding.UTF8);
@@ -196,7 +196,7 @@ public static class CsharpCompileHarness
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <TargetFramework>net8.0</TargetFramework>
-                <ImplicitUsings>enable</ImplicitUsings>
+                <ImplicitUsings>{(codeTarget == "cs-et-json" ? "disable" : "enable")}</ImplicitUsings>
                 <Nullable>disable</Nullable>
                 <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
                 <OutputType>Library</OutputType>
@@ -209,9 +209,11 @@ public static class CsharpCompileHarness
             """;
     }
 
-    private static void CopyRuntime(string workDir)
+    private static void CopyRuntime(string workDir, string codeTarget)
     {
-        var runtimeSrc = TestPaths.RuntimeSupportRoot;
+        var runtimeSrc = codeTarget == "cs-et-json"
+            ? Path.Combine(TestPaths.RuntimeSupportRoot, "ET")
+            : TestPaths.RuntimeSupportRoot;
         foreach (var file in Directory.GetFiles(runtimeSrc, "*.cs", SearchOption.AllDirectories))
         {
             if (file.Contains("Unity", StringComparison.OrdinalIgnoreCase))

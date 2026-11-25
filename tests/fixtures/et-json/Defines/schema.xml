@@ -12,8 +12,19 @@
         <var name="config_type" type="string"/>
         <var name="reward" type="Reward"/>
         <var name="rewards" type="list,Reward"/>
+        <var name="reward_array" type="array,Reward"/>
+        <var name="reward_map" type="map,string,Reward"/>
+        <var name="indexed_rewards" type="(list#index=id),Reward"/>
+        <var name="numbers" type="array,int"/>
+        <var name="matrix" type="array,array,int"/>
+        <var name="optional_number" type="int?"/>
+        <var name="optional_text" type="string?"/>
+        <var name="optional_item" type="Item?"/>
+        <var name="optional_reward" type="Reward?"/>
+        <var name="optional_item_id" type="int?#ref=TbItem"/>
     </bean>
     <table name="TbEtSettings" value="EtSettings" mode="one" input="settings.json"/>
     <table name="TbItem" value="Item" input="*@item.json"/>
     <table name="TbReward" value="Reward" input="*@reward.json"/>
+    <table name="TbRewardList" value="Reward" mode="list" index="id" input="*@reward.json"/>
 </module>

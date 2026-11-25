@@ -84,7 +84,7 @@ public class CsharpEtJsonCodeTarget : CsharpCodeTargetBase
     protected override void OnCreateTemplateContext(TemplateContext ctx)
     {
         base.OnCreateTemplateContext(ctx);
-        ctx.PushGlobal(new CsharpSimpleJsonTemplateExtension());
+        ctx.PushGlobal(new CsharpDotNetJsonTemplateExtension());
         ctx.PushGlobal(new EtReferenceTemplateExtension());
     }
 
@@ -93,6 +93,16 @@ public class CsharpEtJsonCodeTarget : CsharpCodeTargetBase
         public static string EtStringLiteral(string value)
         {
             return System.Text.Json.JsonSerializer.Serialize(value);
+        }
+
+        public static string EtToPrettyString(string fieldName, TType type)
+        {
+            return type switch
+            {
+                TArray or TList or TSet => $"(\"[\" + global::System.String.Join<{CsharpTemplateExtension.DeclaringTypeName(type.ElementType)}>(\",\", {fieldName}) + \"]\")",
+                TMap => $"(\"{{\" + global::System.String.Concat(global::System.Linq.Enumerable.Select({fieldName}, _entry => _entry.Key + \":\" + _entry.Value + \",\")) + \"}}\")",
+                _ => fieldName,
+            };
         }
 
         public static bool EtBeanNeedsResolveRef(TType type)

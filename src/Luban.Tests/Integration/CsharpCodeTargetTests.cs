@@ -2,6 +2,7 @@
 
 using System.Collections;
 using System.Reflection;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Xml.Linq;
 using Luban.Defs;
@@ -140,12 +141,12 @@ public class CsharpCodeTargetTests
         Assert.True(File.Exists(Path.Combine(ws.DataDir, "tbglobal.json")));
         Assert.False(Directory.Exists(Path.Combine(ws.DataDir, "com.example.fallback")));
         var itemCall = hasPackageColumn
-            ? """provider.GetJsonNode("com.example.battle", "tbitem")"""
-            : """provider.GetJsonNode("tbitem")""";
+            ? """provider.GetJsonElement("com.example.battle", "tbitem")"""
+            : """provider.GetJsonElement("tbitem")""";
         Assert.Contains(itemCall, File.ReadAllText(Path.Combine(ws.CodeDir, "TbItem.cs")));
-        Assert.Contains("""provider.GetJsonNode("com.example.score", "ranked/scores")""",
+        Assert.Contains("""provider.GetJsonElement("com.example.score", "ranked/scores")""",
             File.ReadAllText(Path.Combine(ws.CodeDir, "TbScore.cs")));
-        Assert.Contains("""provider.GetJsonNode("tbglobal")""",
+        Assert.Contains("""provider.GetJsonElement("tbglobal")""",
             File.ReadAllText(Path.Combine(ws.CodeDir, "TbGlobal.cs")));
 
         var categories = CsharpCompileHarness.LoadEtConfigCategories(ws.CodeDir, ws.DataDir, "cs-et-json");
@@ -190,12 +191,21 @@ public class CsharpCodeTargetTests
         var tbItem = categories["TbItem"];
         var tbItemType = tbItem.GetType();
         var asm = tbItemType.Assembly;
+        Assert.DoesNotContain(asm.GetTypes(), type => type.Namespace?.StartsWith("Luban", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(asm.GetReferencedAssemblies(), name => name.Name.StartsWith("Luban", StringComparison.Ordinal));
 
         var ctor = tbItemType.GetConstructor(new[] { asm.GetType("ET.IConfigJsonDataProvider") });
         Assert.NotNull(ctor);
         var ctorParam = ctor.GetParameters().Single();
         Assert.Equal("IConfigJsonDataProvider", ctorParam.ParameterType.Name);
         Assert.Equal("ET", ctorParam.ParameterType.Namespace);
+        var providerMethods = ctorParam.ParameterType.GetMethods();
+        Assert.Equal(2, providerMethods.Length);
+        Assert.All(providerMethods, method =>
+        {
+            Assert.Equal("GetJsonElement", method.Name);
+            Assert.Equal(typeof(JsonElement), method.ReturnType);
+        });
 
         var categoryInterface = asm.GetType("ET.IConfigCategory");
         Assert.NotNull(categoryInterface);
@@ -209,11 +219,23 @@ public class CsharpCodeTargetTests
         var configInterface = asm.GetType("ET.IConfig");
         Assert.NotNull(configInterface);
         Assert.True(configInterface.IsAssignableFrom(itemType));
+        Assert.Equal(typeof(object), itemType.BaseType);
+        Assert.True(itemType.GetField("Name").IsInitOnly);
+        Assert.Equal(itemType.GetField("__ID__").GetRawConstantValue(), CsharpCompileHarness.Invoke(item, "GetTypeId"));
         Assert.Equal("sword", CsharpCompileHarness.GetProp<string>(item, "Name"));
+        Assert.Equal("GREEN", CsharpCompileHarness.GetProp<object>(item, "Quality").ToString());
+        Assert.Contains("tags:[weapon,melee],", item.ToString());
+        Assert.Contains("attrs:{atk:10,def:2,},", item.ToString());
+        Assert.Contains("flags:[1,2],", item.ToString());
 
         var shape = CsharpCompileHarness.GetProp<object>(item, "Shape");
         Assert.Equal("Circle", shape.GetType().Name);
         Assert.Equal(1.5f, CsharpCompileHarness.GetProp<float>(shape, "Radius"), 3);
+        var shapeType = asm.GetType("cfg.Shape");
+        Assert.Equal(typeof(object), shapeType.BaseType);
+        var getTypeId = shapeType.GetMethod("GetTypeId");
+        Assert.True(getTypeId.IsAbstract);
+        Assert.Equal(shape.GetType().GetField("__ID__").GetRawConstantValue(), getTypeId.Invoke(shape, null));
 
         var tbGlobal = categories["TbGlobal"];
         Assert.Equal(3, CsharpCompileHarness.GetProp<int>(tbGlobal, "Version"));
@@ -230,6 +252,7 @@ public class CsharpCodeTargetTests
         var calledField = itemType.GetField("AfterDeserializeCalled", BindingFlags.Public | BindingFlags.Static);
         Assert.NotNull(calledField);
         Assert.True((bool)calledField.GetValue(null));
+        Assert.True(CsharpCompileHarness.GetProp<bool>(tbItem, "EndRefCalled"));
     }
 
     [Fact]
@@ -254,12 +277,117 @@ public class CsharpCodeTargetTests
         Assert.Equal("settings", CsharpCompileHarness.GetProp<string>(settings, "ConfigType"));
         var nestedReward = CsharpCompileHarness.GetProp<object>(settings, "Reward");
         var nestedRewards = CsharpCompileHarness.GetProp<IEnumerable>(settings, "Rewards");
-        foreach (var row in new[] { reward, nestedReward, Assert.Single(nestedRewards) })
+        var rewardArray = CsharpCompileHarness.GetProp<IEnumerable>(settings, "RewardArray");
+        var rewardMap = CsharpCompileHarness.GetProp<IDictionary>(settings, "RewardMap");
+        var settingsData = CsharpCompileHarness.GetProp<object>(settings, "Data");
+        var rewardIndex = CsharpCompileHarness.GetProp<IDictionary>(settingsData, "IndexedRewards_Index");
+        var listReward = CsharpCompileHarness.Invoke(categories["TbRewardList"], "GetById", 100);
+        foreach (var row in new[] { reward, nestedReward, Assert.Single(nestedRewards), Assert.Single(rewardArray), rewardMap["first"], rewardIndex[100], listReward })
         {
             var refItem = CsharpCompileHarness.GetProp<object>(row, "ItemId_Ref");
             Assert.NotNull(refItem);
             Assert.Equal("sword", CsharpCompileHarness.GetProp<string>(refItem, "Name"));
             Assert.Same(refItem, Assert.Single(CsharpCompileHarness.GetProp<IEnumerable>(row, "ItemIds_Ref")));
+        }
+    }
+
+    [Fact]
+    public void EtJson_DeserializesNullableFieldsAndArraysWithoutRetainingDocument()
+    {
+        using var ws = new TempWorkspace();
+        LubanRunner.Run(
+            TestPaths.FixtureConf("et-json"),
+            codeTargets: new[] { "cs-et-json" },
+            dataTargets: new[] { "json" },
+            outputCodeDir: ws.CodeDir,
+            outputDataDir: ws.DataDir);
+
+        var categories = CsharpCompileHarness.LoadEtConfigCategories(ws.CodeDir, ws.DataDir, "cs-et-json");
+        var data = CsharpCompileHarness.GetProp<object>(categories["TbEtSettings"], "Data");
+        var deserialize = data.GetType().GetMethod("DeserializeEtSettings");
+        Assert.NotNull(deserialize);
+        var json = JsonNode.Parse(File.ReadAllText(Path.Combine(ws.DataDir, "tbetsettings.json")))[0];
+        var optionalFields = new[] { "optional_number", "optional_text", "optional_item", "optional_reward", "optional_item_id" };
+        var optionalMembers = new[] { "OptionalNumber", "OptionalText", "OptionalItem", "OptionalReward", "OptionalItemId" };
+
+        // Exercise omitted properties as well as explicit JSON nulls.
+        foreach (var explicitNull in new[] { false, true })
+        {
+            foreach (var field in optionalFields)
+            {
+                if (explicitNull)
+                {
+                    json[field] = null;
+                }
+                else
+                {
+                    json.AsObject().Remove(field);
+                }
+            }
+
+            object row;
+            using (var document = JsonDocument.Parse(json.ToJsonString()))
+            {
+                row = deserialize.Invoke(null, new object[] { document.RootElement });
+            }
+
+            foreach (var member in optionalMembers)
+            {
+                Assert.Null(CsharpCompileHarness.GetProp<object>(row, member));
+            }
+            CsharpCompileHarness.Invoke(row, "ResolveRef");
+            Assert.Null(CsharpCompileHarness.GetProp<object>(row, "OptionalItemId_Ref"));
+            Assert.Equal(new[] { 3, 5 }, CsharpCompileHarness.GetProp<int[]>(row, "Numbers"));
+            var matrix = CsharpCompileHarness.GetProp<int[][]>(row, "Matrix");
+            Assert.Equal(new[] { 1, 2 }, matrix[0]);
+            Assert.Equal(new[] { 3 }, matrix[1]);
+            Assert.Contains("numbers:[3,5],", row.ToString());
+        }
+
+        json["optional_number"] = 42;
+        json["optional_text"] = "hello";
+        json["optional_item"] = JsonNode.Parse("""{"id":2,"name":"shield"}""");
+        json["optional_reward"] = json["reward"].DeepClone();
+        json["optional_item_id"] = 1;
+        object populated;
+        using (var document = JsonDocument.Parse(json.ToJsonString()))
+        {
+            populated = deserialize.Invoke(null, new object[] { document.RootElement });
+        }
+        CsharpCompileHarness.Invoke(populated, "ResolveRef");
+        Assert.Equal(42, CsharpCompileHarness.GetProp<int?>(populated, "OptionalNumber"));
+        Assert.Equal("hello", CsharpCompileHarness.GetProp<string>(populated, "OptionalText"));
+        Assert.Equal("shield", CsharpCompileHarness.GetProp<string>(CsharpCompileHarness.GetProp<object>(populated, "OptionalItem"), "Name"));
+        var expectedItem = CsharpCompileHarness.Invoke(categories["TbItem"], "Get", 1);
+        Assert.Same(expectedItem, CsharpCompileHarness.GetProp<object>(populated, "OptionalItemId_Ref"));
+        var optionalReward = CsharpCompileHarness.GetProp<object>(populated, "OptionalReward");
+        Assert.Same(expectedItem, CsharpCompileHarness.GetProp<object>(optionalReward, "ItemId_Ref"));
+    }
+
+    [Fact]
+    public void EtJson_UsesStandardJsonExceptions()
+    {
+        using var ws = new TempWorkspace();
+        LubanRunner.Run(
+            TestPaths.FixtureConf("core"),
+            codeTargets: new[] { "cs-et-json" },
+            dataTargets: new[] { "json" },
+            outputCodeDir: ws.CodeDir,
+            outputDataDir: ws.DataDir);
+
+        var categories = CsharpCompileHarness.LoadEtConfigCategories(ws.CodeDir, ws.DataDir, "cs-et-json");
+        var asm = categories["TbGlobal"].GetType().Assembly;
+        using var document = JsonDocument.Parse("""{"$type":"MissingShape"}""");
+        var deserialize = asm.GetType("cfg.Shape").GetMethod("DeserializeShape");
+        var unknownType = Assert.Throws<TargetInvocationException>(() => deserialize.Invoke(null, new object[] { document.RootElement }));
+        Assert.IsType<JsonException>(unknownType.InnerException);
+
+        var provider = Activator.CreateInstance(asm.GetType("ET.FileConfigJsonDataProvider"), new object[] { ws.DataDir });
+        foreach (var rows in new[] { "[]", "[{},{}]" })
+        {
+            File.WriteAllText(Path.Combine(ws.DataDir, "tbglobal.json"), rows);
+            var invalidSize = Assert.Throws<TargetInvocationException>(() => Activator.CreateInstance(categories["TbGlobal"].GetType(), new[] { provider }));
+            Assert.IsType<JsonException>(invalidSize.InnerException);
         }
     }
 
@@ -301,7 +429,9 @@ public class CsharpCodeTargetTests
                 public partial class TbItem
                 {
                     public static int AfterDeserializeCalls;
+                    public bool EndRefCalled;
                     partial void OnAfterDeserialize() => AfterDeserializeCalls++;
+                    partial void EndRef() => EndRefCalled = true;
                 }
 
                 public partial class Item

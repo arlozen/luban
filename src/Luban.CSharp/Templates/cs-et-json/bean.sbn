@@ -1,5 +1,4 @@
-using Luban;
-using Luban.SimpleJSON;
+using System.Text.Json;
 {{
     parent_def_type = __bean.parent_def_type
     export_fields = __bean.export_fields
@@ -86,10 +85,10 @@ end
 {{~if __bean.is_value_type~}}
 public partial struct {{__name}} : global::ET.IConfig
 {{~else~}}
-public {{class_modifier __bean}} partial class {{__name}} : {{if parent_def_type}}{{__bean.parent}}, global::ET.IConfig{{else}}global::Luban.BeanBase, global::ET.IConfig{{end}}
+public {{class_modifier __bean}} partial class {{__name}} : {{if parent_def_type}}{{__bean.parent}}, {{end}}global::ET.IConfig
 {{~end~}}
 {
-    public {{__name}}(JSONNode _buf) {{if parent_def_type}} : base(_buf) {{end}}
+    public {{__name}}(JsonElement _buf) {{if parent_def_type}} : base(_buf) {{end}}
     {
         {{~if !struct_refs.empty?~}}
         __lubanResolvedRefs = new __LubanResolvedRefs();
@@ -111,15 +110,15 @@ public {{class_modifier __bean}} partial class {{__name}} : {{if parent_def_type
         OnAfterDeserialize();
     }
 
-    public static {{__name}} Deserialize{{__name}}(JSONNode _buf)
+    public static {{__name}} Deserialize{{__name}}(JsonElement _buf)
     {
     {{~if __bean.is_abstract_type~}}
-        switch ((string)_buf["$type"])
+        switch (_buf.GetProperty("$type").GetString())
         {
         {{~for child in __bean.hierarchy_not_abstract_children~}}
             case "{{impl_data_type child __bean}}": return new {{child.full_name}}(_buf);
         {{~end~}}
-            default: throw new SerializationException();
+            default: throw new JsonException("Unknown {{__name}} $type");
         }
     {{~else~}}
         return new {{__bean.full_name}}(_buf);
@@ -162,9 +161,11 @@ public {{class_modifier __bean}} partial class {{__name}} : {{if parent_def_type
     }
 {{~end~}}
 
-{{~if !__bean.is_abstract_type && !__bean.is_value_type~}}
+{{~if __bean.is_abstract_type && !parent_def_type~}}
+    public abstract int GetTypeId();
+{{~else if !__bean.is_abstract_type && !__bean.is_value_type~}}
     public const int __ID__ = {{__bean.id}};
-    public override int GetTypeId() => __ID__;
+    public {{if parent_def_type}}override {{end}}int GetTypeId() => __ID__;
 {{~end~}}
 
     public {{method_modifier __bean}} void ResolveRef()
@@ -190,7 +191,7 @@ public {{class_modifier __bean}} partial class {{__name}} : {{if parent_def_type
     {
         return "{{full_name}}{ "
     {{~for field in hierarchy_export_fields ~}}
-        + "{{format_field_name __code_style field.name}}:" + {{to_pretty_string (format_property_name __code_style field.name) field.ctype}} + ","
+        + "{{format_field_name __code_style field.name}}:" + {{et_to_pretty_string (format_property_name __code_style field.name) field.ctype}} + ","
     {{~end~}}
         + "}";
     }

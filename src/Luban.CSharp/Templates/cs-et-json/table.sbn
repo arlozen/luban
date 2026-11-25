@@ -1,5 +1,4 @@
-using Luban;
-using Luban.SimpleJSON;
+using System.Text.Json;
 
 {{
     key_type = __table.key_ttype
@@ -49,12 +48,12 @@ public partial class {{__name}} : global::ET.Singleton<{{__name}}>, global::ET.I
 
     public {{__name}}(global::ET.IConfigJsonDataProvider provider)
     {
-        JSONNode _buf = provider.GetJsonNode({{provider_args}});
-        int count = _buf.Count;
+        JsonElement _buf = provider.GetJsonElement({{provider_args}});
+        int count = _buf.GetArrayLength();
         _dataMap = new System.Collections.Generic.Dictionary<{{declaring_type_name __key_type}}, {{declaring_type_name __value_type}}>(count);
         _dataList = new System.Collections.Generic.List<{{declaring_type_name __value_type}}>(count);
 
-        foreach(JSONNode _ele in _buf.Children)
+        foreach(JsonElement _ele in _buf.EnumerateArray())
         {
             {{declaring_type_name __value_type}} _v;
             {{deserialize '_v' '_ele' __value_type}}
@@ -107,11 +106,11 @@ public partial class {{__name}} : global::ET.Singleton<{{__name}}>, global::ET.I
 
     public {{__name}}(global::ET.IConfigJsonDataProvider provider)
     {
-        JSONNode _buf = provider.GetJsonNode({{provider_args}});
-        int count = _buf.Count;
+        JsonElement _buf = provider.GetJsonElement({{provider_args}});
+        int count = _buf.GetArrayLength();
         _dataList = new System.Collections.Generic.List<{{declaring_type_name __value_type}}>(count);
 
-        foreach(JSONNode _ele in _buf.Children)
+        foreach(JsonElement _ele in _buf.EnumerateArray())
         {
             {{declaring_type_name __value_type}} _v;
             {{deserialize '_v' '_ele' __value_type}}
@@ -165,9 +164,9 @@ public partial class {{__name}} : global::ET.Singleton<{{__name}}>, global::ET.I
 
     public {{__name}}(global::ET.IConfigJsonDataProvider provider)
     {
-        JSONNode _buf = provider.GetJsonNode({{provider_args}});
-        int n = _buf.Count;
-        if (n != 1) throw new SerializationException("table mode=one, but size != 1");
+        JsonElement _buf = provider.GetJsonElement({{provider_args}});
+        int n = _buf.GetArrayLength();
+        if (n != 1) throw new JsonException("table mode=one, but size != 1");
         {{deserialize '_data' '_buf[0]' __value_type}}
         OnAfterDeserialize();
     }
